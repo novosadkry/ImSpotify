@@ -1,0 +1,13 @@
+[package]
+name = "im-spotify"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clipboard = "0.5.0"
+glium = "0.32.1"
+imgui = { git = "https://github.com/imgui-rs/imgui-rs", branch = "main", features = ["docking"] }
+imgui-winit-support = { git = "https://github.com/imgui-rs/imgui-rs", branch = "main" }
+imgui-glium-renderer = { git = "https://github.com/imgui-rs/imgui-rs", branch = "main" }
