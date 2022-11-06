@@ -8,6 +8,8 @@ edition = "2021"
 [dependencies]
 clipboard = "0.5.0"
 glium = "0.32.1"
+tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
+rspotify = { version = "0.11.5", features = ["cli", "env-file"] }
 imgui = { git = "https://github.com/imgui-rs/imgui-rs", branch = "main", features = ["docking"] }
 imgui-winit-support = { git = "https://github.com/imgui-rs/imgui-rs", branch = "main" }
 imgui-glium-renderer = { git = "https://github.com/imgui-rs/imgui-rs", branch = "main" }

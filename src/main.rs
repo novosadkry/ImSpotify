@@ -1,7 +1,8 @@
 use im_spotify::App;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     App::builder()
-        .build()
-        .run();
+        .cli().build()
+        .run().await;
 }
