@@ -1,4 +1,4 @@
-use im_spotify::{App, AppResult};
+use imspotify::{App, AppResult};
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
