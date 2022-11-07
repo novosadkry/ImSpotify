@@ -1,8 +1,10 @@
-use im_spotify::App;
+use im_spotify::{App, AppResult};
 
 #[tokio::main]
-async fn main() {
+async fn main() -> AppResult<()> {
     App::builder()
         .cli().build()
-        .run().await;
+        .run().await?;
+
+    Ok(())
 }

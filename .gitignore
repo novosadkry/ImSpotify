@@ -18,3 +18,4 @@ Cargo.lock
 
 # Application environmental variables
 .env
+.spotify_token_cache.json
