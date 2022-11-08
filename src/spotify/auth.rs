@@ -16,7 +16,7 @@ use rspotify::{
     OAuth, Config, clients::mutex::Mutex
 };
 
-pub async fn oauth_client() -> AppResult<impl OAuthClient> {
+pub async fn oauth_client() -> AppResult<AuthCodeSpotify> {
     let oauth = OAuth {
         redirect_uri: String::from("http://localhost:8888/callback"),
         scopes: scopes!(
@@ -46,26 +46,24 @@ pub async fn oauth_client() -> AppResult<impl OAuthClient> {
         }
     );
 
-    match spotify.read_token_cache(false).await.ok() {
-        Some(token) => {
-            spotify.token = Arc::new(Mutex::new(token));
-        },
+    if let Some(token) = spotify.read_token_cache(false).await.ok().flatten() {
+        spotify.token = Arc::new(Mutex::new(Some(token)));
+    }
 
-        None => {
-            let url = spotify.get_authorize_url(false)?;
-            let code = get_code_from_user(&spotify, url.as_str()).await?;
+    else {
+        let url = spotify.get_authorize_url(false)?;
+        let code = get_code_from_user(&spotify, url.as_str()).await?;
 
-            spotify.request_token(code.as_str()).await?;
-            spotify.write_token_cache().await?;
-        }
+        spotify.request_token(code.as_str()).await?;
+        spotify.write_token_cache().await?;
     };
 
     Ok(spotify)
 }
 
-async fn get_code_from_user(client: &impl OAuthClient, url: &str) -> AppResult<String> {
+async fn get_code_from_user(spotify: &AuthCodeSpotify, url: &str) -> AppResult<String> {
     match webbrowser::open(url) {
-        Ok(_) => println!("Opened {} in your browser.", url),
+        Ok(_) => println!("Please proceed to log-in in your browser."),
         Err(why) => eprintln!(
             "Error when trying to open an URL in your browser: {:?}. \
             Please navigate here manually: {}",
@@ -87,9 +85,7 @@ async fn get_code_from_user(client: &impl OAuthClient, url: &str) -> AppResult<S
                 .split_whitespace()
                 .collect::<Vec<&str>>();
 
-            println!("{}", header[1]);
-
-            let code = client
+            let code = spotify
                 .parse_response_code(format!("{}{}", "http://localhost:8888", header[1]).as_str())
                 .ok_or("Unable to parse the response code")?;
 
@@ -103,7 +99,7 @@ async fn get_code_from_user(client: &impl OAuthClient, url: &str) -> AppResult<S
             let mut input = String::new();
             std::io::stdin().read_line(&mut input)?;
 
-            let code = client
+            let code = spotify
                 .parse_response_code(&input)
                 .ok_or("Unable to parse the response code")?;
 
