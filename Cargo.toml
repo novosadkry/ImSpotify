@@ -6,11 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clipboard = "0.5.0"
-glium = "0.32.1"
+glium = "*"
+clipboard = "*"
 webbrowser = "0.8.1"
 tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
 rspotify = { version = "0.11.5", features = ["cli", "env-file"] }
-imgui = { git = "https://github.com/imgui-rs/imgui-rs", branch = "main", features = ["docking"] }
-imgui-winit-support = { git = "https://github.com/imgui-rs/imgui-rs", branch = "main" }
-imgui-glium-renderer = { git = "https://github.com/imgui-rs/imgui-rs", branch = "main" }
+imgui = { git = "https://github.com/luke-titley/imgui-docking-rs", branch = "release/docking/0.5.0" }
+imgui-winit-support = { git = "https://github.com/luke-titley/imgui-docking-rs", branch = "release/docking/0.5.0" }
+imgui-glium-renderer = { git = "https://github.com/luke-titley/imgui-docking-rs", branch = "release/docking/0.5.0" }

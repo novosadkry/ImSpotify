@@ -1,14 +1,13 @@
-// Source: https://github.com/imgui-rs/imgui-rs/blob/main/imgui-examples/examples/support/mod.rs
+// Source: https://github.com/luke-titley/imgui-docking-rs/blob/release/docking/0.5.0/imgui-examples/examples/support/mod.rs
 
 use glium::glutin;
 use glium::glutin::event::{Event, WindowEvent};
 use glium::glutin::event_loop::{ControlFlow, EventLoop};
 use glium::glutin::window::WindowBuilder;
 use glium::{Display, Surface};
-use imgui::{Context, Ui, ConfigFlags};
+use imgui::{Context, FontConfig, FontSource, Ui, ConfigFlags};
 use imgui_glium_renderer::Renderer;
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
-use std::path::Path;
 use std::time::Instant;
 
 mod clipboard;
@@ -23,8 +22,8 @@ pub struct System {
 }
 
 pub fn init(title: &str) -> System {
-    let title = match Path::new(&title).file_name() {
-        Some(file_name) => file_name.to_str().unwrap(),
+    let title = match title.rfind('/') {
+        Some(idx) => title.split_at(idx + 1).1,
         None => title,
     };
     let event_loop = EventLoop::new();
@@ -33,14 +32,15 @@ pub fn init(title: &str) -> System {
         .with_title(title.to_owned())
         .with_inner_size(glutin::dpi::LogicalSize::new(1024f64, 768f64));
     let display =
-        Display::new(builder, context, &event_loop).expect("Failed to initialize display");
+        Display::new(builder, context, &event_loop)
+            .expect("Failed to initialize display");
 
     let mut imgui = Context::create();
     imgui.set_ini_filename(None);
     imgui.io_mut().config_flags |= ConfigFlags::DOCKING_ENABLE;
 
     if let Some(backend) = clipboard::init() {
-        imgui.set_clipboard_backend(backend);
+        imgui.set_clipboard_backend(Box::new(backend));
     } else {
         eprintln!("Failed to initialize clipboard");
     }
@@ -49,21 +49,22 @@ pub fn init(title: &str) -> System {
     {
         let gl_window = display.gl_window();
         let window = gl_window.window();
-
-        let dpi_mode = if let Ok(factor) = std::env::var("IMGUI_EXAMPLE_FORCE_DPI_FACTOR") {
-            // Allow forcing of HiDPI factor for debugging purposes
-            match factor.parse::<f64>() {
-                Ok(f) => HiDpiMode::Locked(f),
-                Err(e) => panic!("Invalid scaling factor: {}", e),
-            }
-        } else {
-            HiDpiMode::Default
-        };
-
-        platform.attach_window(imgui.io_mut(), window, dpi_mode);
+        platform.attach_window(imgui.io_mut(), &window, HiDpiMode::Rounded);
     }
 
-    let font_size = 13.0;
+    let hidpi_factor = platform.hidpi_factor();
+    let font_size = (13.0 * hidpi_factor) as f32;
+    imgui.fonts().add_font(&[
+        FontSource::DefaultFontData {
+            config: Some(FontConfig {
+                size_pixels: font_size,
+                ..FontConfig::default()
+            }),
+        },
+    ]);
+
+    imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
+
     let renderer = Renderer::init(&mut imgui, &display)
         .expect("Failed to initialize renderer");
 
@@ -98,15 +99,15 @@ impl System {
             Event::MainEventsCleared => {
                 let gl_window = display.gl_window();
                 platform
-                    .prepare_frame(imgui.io_mut(), gl_window.window())
+                    .prepare_frame(imgui.io_mut(), &gl_window.window())
                     .expect("Failed to prepare frame");
                 gl_window.window().request_redraw();
             }
             Event::RedrawRequested(_) => {
-                let ui = imgui.frame();
+                let mut ui = imgui.frame();
 
                 let mut run = true;
-                run_ui(&mut run, ui);
+                run_ui(&mut run, &mut ui);
                 if !run {
                     *control_flow = ControlFlow::Exit;
                 }
@@ -114,8 +115,8 @@ impl System {
                 let gl_window = display.gl_window();
                 let mut target = display.draw();
                 target.clear_color_srgb(1.0, 1.0, 1.0, 1.0);
-                platform.prepare_render(ui, gl_window.window());
-                let draw_data = imgui.render();
+                platform.prepare_render(&ui, gl_window.window());
+                let draw_data = ui.render();
                 renderer
                     .render(&mut target, draw_data)
                     .expect("Rendering failed");
