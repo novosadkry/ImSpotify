@@ -1,5 +1,6 @@
 use crate::AppResult;
 
+use anyhow::Context;
 use std::{
     net::SocketAddr,
     sync::Arc
@@ -34,7 +35,7 @@ pub async fn oauth_client() -> AppResult<AuthCodeSpotify> {
     };
 
     let creds = Credentials::from_env()
-        .ok_or("Couldn't load environment variables RSPOTIFY_CLIENT_ID and RSPOTIFY_CLIENT_SECRET")?;
+        .context("Couldn't load environment variables RSPOTIFY_CLIENT_ID and RSPOTIFY_CLIENT_SECRET")?;
 
     let mut spotify = AuthCodeSpotify::with_config(
         creds,
@@ -87,7 +88,7 @@ async fn get_code_from_user(spotify: &AuthCodeSpotify, url: &str) -> AppResult<S
 
             let code = spotify
                 .parse_response_code(format!("{}{}", "http://localhost:8888", header[1]).as_str())
-                .ok_or("Unable to parse the response code")?;
+                .context("Unable to parse the response code")?;
 
             respond_with_success(&mut stream).await?;
 
@@ -101,7 +102,7 @@ async fn get_code_from_user(spotify: &AuthCodeSpotify, url: &str) -> AppResult<S
 
             let code = spotify
                 .parse_response_code(&input)
-                .ok_or("Unable to parse the response code")?;
+                .context("Unable to parse the response code")?;
 
             Ok(code)
         }

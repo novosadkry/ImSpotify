@@ -3,13 +3,13 @@ pub use self::builder::AppBuilder;
 use crate::System;
 use crate::spotify;
 
-use std::error::Error;
+use anyhow::{Context, Result};
 use rspotify::AuthCodeSpotify;
 use rspotify::prelude::OAuthClient;
 
 mod builder;
 
-pub type AppResult<T> = Result<T, Box<dyn Error>>;
+pub type AppResult<T> = Result<T>;
 
 pub struct App {
     pub system: Option<System>,
@@ -34,7 +34,7 @@ impl App {
 
             let cmd = std::env::args()
                 .nth(1)
-                .ok_or("Invalid argument")?;
+                .context("Invalid argument")?;
 
             self.handle_command(cmd.as_str()).await?;
         }
@@ -46,11 +46,11 @@ impl App {
         match cmd {
             "--resume" => {
                 self.spotify.resume_playback(None, None).await
-                    .or(Err("Unable to resume playback"))?;
+                    .context("Unable to resume playback")?;
             }
             "--pause" => {
                 self.spotify.pause_playback(None).await
-                    .or(Err("Unable to pause playback"))?
+                    .context("Unable to pause playback")?
             }
             _ => todo!()
         };
