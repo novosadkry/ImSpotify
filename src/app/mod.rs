@@ -1,18 +1,19 @@
 pub use self::builder::AppBuilder;
 
-use crate::System;
-use crate::spotify;
+use crate::{spotify, system};
 
+use std::sync::Arc;
 use anyhow::{Context, Result};
 use rspotify::AuthCodeSpotify;
 use rspotify::prelude::OAuthClient;
 
 mod builder;
+mod ui;
 
 pub type AppResult<T> = Result<T>;
 
 pub struct App {
-    pub system: Option<System>,
+    pub cli: bool,
     pub spotify: AuthCodeSpotify
 }
 
@@ -24,8 +25,13 @@ impl App {
     pub async fn run(mut self) -> AppResult<()> {
         self.spotify = spotify::auth::oauth_client().await?;
 
-        if let Some(system) = self.system {
-            system.main_loop(move |run, ui| ui.show_demo_window(run));
+        if !self.cli {
+            let system = system::init(file!());
+            let app = Arc::new(self);
+
+            system.main_loop(move |f, r, u| {
+                ui::main_loop(&app, f, r, u);
+            });
         }
 
         else {

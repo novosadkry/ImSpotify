@@ -1,6 +1,4 @@
 use super::App;
-use crate::system;
-
 use rspotify::AuthCodeSpotify;
 
 #[derive(Default)]
@@ -10,12 +8,8 @@ pub struct AppBuilder {
 
 impl AppBuilder {
     pub fn build(self) -> App {
-        let system = if !self.cli {
-            Some(system::init(file!()))
-        } else { None };
-
         App {
-            system: system,
+            cli: self.cli,
             spotify: AuthCodeSpotify::default()
         }
     }

@@ -13,6 +13,7 @@ use std::time::Instant;
 mod clipboard;
 
 pub struct System {
+    pub first_run: bool,
     pub event_loop: EventLoop<()>,
     pub display: glium::Display,
     pub imgui: Context,
@@ -69,6 +70,7 @@ pub fn init(title: &str) -> System {
         .expect("Failed to initialize renderer");
 
     System {
+        first_run: true,
         event_loop,
         display,
         imgui,
@@ -79,7 +81,7 @@ pub fn init(title: &str) -> System {
 }
 
 impl System {
-    pub fn main_loop<F: FnMut(&mut bool, &mut Ui) + 'static>(self, mut run_ui: F) {
+    pub fn main_loop<F: FnMut(bool, &mut bool, &mut Ui) + 'static>(mut self, mut run_ui: F) {
         let System {
             event_loop,
             display,
@@ -105,9 +107,14 @@ impl System {
             }
             Event::RedrawRequested(_) => {
                 let mut ui = imgui.frame();
-
                 let mut run = true;
-                run_ui(&mut run, &mut ui);
+
+                run_ui(
+                    self.first_run,
+                    &mut run, &mut ui
+                );
+                self.first_run = false;
+
                 if !run {
                     *control_flow = ControlFlow::Exit;
                 }
