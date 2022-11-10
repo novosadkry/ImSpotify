@@ -6,8 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-glium = "*"
-clipboard = "*"
+glium = "0.27.0"
+winit = "0.22.2"
+clipboard = "0.5.0"
 webbrowser = "0.8.1"
 anyhow = "1.0.66"
 tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }

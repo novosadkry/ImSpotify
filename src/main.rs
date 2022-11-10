@@ -1,10 +1,9 @@
 use imspotify::{App, AppResult};
 
-#[tokio::main]
-async fn main() -> AppResult<()> {
+fn main() -> AppResult<()> {
     App::builder()
-        .cli().build()
-        .run().await?;
+        .build()
+        .run()?;
 
     Ok(())
 }

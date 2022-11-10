@@ -14,7 +14,8 @@ use rspotify::{
     scopes,
     AuthCodeSpotify,
     Credentials,
-    OAuth, Config, clients::mutex::Mutex
+    OAuth, Config,
+    clients::mutex::Mutex,
 };
 
 pub async fn oauth_client() -> AppResult<AuthCodeSpotify> {
@@ -53,7 +54,8 @@ pub async fn oauth_client() -> AppResult<AuthCodeSpotify> {
 
     else {
         let url = spotify.get_authorize_url(false)?;
-        let code = get_code_from_user(&spotify, url.as_str()).await?;
+        let code = get_code_from_user(&spotify, url.as_str()).await
+            .context("Couldn't acquire auth code from the user")?;
 
         spotify.request_token(code.as_str()).await?;
         spotify.write_token_cache().await?;
@@ -65,10 +67,9 @@ pub async fn oauth_client() -> AppResult<AuthCodeSpotify> {
 async fn get_code_from_user(spotify: &AuthCodeSpotify, url: &str) -> AppResult<String> {
     match webbrowser::open(url) {
         Ok(_) => println!("Please proceed to log-in in your browser."),
-        Err(why) => eprintln!(
-            "Error when trying to open an URL in your browser: {:?}. \
-            Please navigate here manually: {}",
-            why, url
+        Err(_) => eprintln!(
+            "Unable to open the URL in your browser. \
+            Please navigate here manually: {}", url
         ),
     }
 

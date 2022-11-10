@@ -1,5 +1,4 @@
 use super::App;
-use rspotify::AuthCodeSpotify;
 
 #[derive(Default)]
 pub struct AppBuilder {
@@ -8,9 +7,16 @@ pub struct AppBuilder {
 
 impl AppBuilder {
     pub fn build(self) -> App {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .unwrap();
+
         App {
+            rt: runtime,
             cli: self.cli,
-            spotify: AuthCodeSpotify::default()
+            spotify: Default::default()
         }
     }
 
