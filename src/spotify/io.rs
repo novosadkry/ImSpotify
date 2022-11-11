@@ -1,18 +1,22 @@
 use crate::{App, AppResult};
 
 use std::sync::Arc;
-use rspotify::prelude::{
-    BaseClient,
-    OAuthClient
+use rspotify::{
+    prelude::OAuthClient,
+    model::AdditionalType
 };
-use tokio::sync::{
-    Mutex,
-    mpsc::Receiver
+use tokio::{
+    sync::{
+        Mutex,
+        mpsc::Receiver
+    },
+    time::Instant
 };
 
 #[derive(Debug)]
 pub enum IoEvent {
-    FetchUserInfo
+    FetchUserInfo,
+    FetchCurrentPlayback
 }
 
 pub async fn main_loop(io: &mut Receiver<IoEvent>, app: &Arc<Mutex<App>>) {
@@ -27,11 +31,22 @@ pub async fn main_loop(io: &mut Receiver<IoEvent>, app: &Arc<Mutex<App>>) {
 pub async fn handle_event(event: IoEvent, app: &Arc<Mutex<App>>) -> AppResult<()> {
     let mut app = app.lock().await;
     let spotify = &mut app.spotify;
+
     let client = &spotify.client;
+    let state = &mut spotify.state;
 
     match event {
         IoEvent::FetchUserInfo => {
-            spotify.me = Some(client.me().await?);
+            state.me = Some(client.me().await?);
+        },
+        IoEvent::FetchCurrentPlayback => {
+            let playback = client.current_playback(
+                None,
+                Some(vec![&AdditionalType::Episode, &AdditionalType::Track])
+            ).await?;
+
+            state.playback = playback;
+            state.last_fetch = Some(Instant::now());
         }
     };
 

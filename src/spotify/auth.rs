@@ -22,14 +22,20 @@ pub async fn oauth_client() -> AppResult<AuthCodeSpotify> {
     let oauth = OAuth {
         redirect_uri: String::from("http://localhost:8888/callback"),
         scopes: scopes!(
-            "user-library-read",
-            "playlist-read-private",
+            "streaming",
             "playlist-read-collaborative",
-            "user-read-playback-state",
-            "user-read-currently-playing",
+            "playlist-read-private",
+            "playlist-modify-private",
+            "playlist-modify-public",
+            "user-follow-read",
+            "user-follow-modify",
+            "user-library-modify",
+            "user-library-read",
             "user-modify-playback-state",
+            "user-read-currently-playing",
+            "user-read-playback-state",
             "user-read-playback-position",
-            "user-top-read",
+            "user-read-private",
             "user-read-recently-played"
         ),
         ..Default::default()
