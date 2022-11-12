@@ -1,5 +1,7 @@
 use super::App;
 
+use std::sync::Arc;
+
 #[derive(Default)]
 pub struct AppBuilder {
     cli: bool
@@ -13,7 +15,7 @@ impl AppBuilder {
             .unwrap();
 
         App {
-            rt: runtime,
+            rt: Arc::new(runtime),
             cli: self.cli,
             spotify: Default::default()
         }

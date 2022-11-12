@@ -3,7 +3,7 @@ pub use self::builder::AppBuilder;
 use crate::{
     spotify::{
         Spotify,
-        io::{IoEvent, self},
+        io::{Io, IoState, IoEvent, self},
         auth::oauth_client
     },
     system
@@ -22,8 +22,9 @@ mod ui;
 
 pub type AppResult<T> = Result<T>;
 
+#[derive(Clone)]
 pub struct App {
-    pub rt: Runtime,
+    pub rt: Arc<Runtime>,
     pub cli: bool,
     pub spotify: Spotify
 }
@@ -35,39 +36,46 @@ impl App {
 
     pub fn run(mut self) -> AppResult<()> {
         // Authenticate Spotify client
-        self.spotify = Spotify {
-            client: self.rt.block_on(oauth_client())?,
-            ..Default::default()
-        };
+        self.spotify.client = self.rt.block_on(oauth_client())?;
 
         if !self.cli {
             // Initialize window system handler
             let system = system::init(file!());
 
-            // Make two thread-safe references to self
-            let app = Arc::new(Mutex::new(self));
-
-            // Create channel for IO events
-            let (tx, mut rx) = mpsc::unbounded_channel();
+            // Create state and channels for IO events
+            let io_state = Arc::new(Mutex::new(IoState::default()));
+            let (tx, rx) = mpsc::unbounded_channel();
 
             // Run the IO thread
             let io_handle = {
-                let a = app.clone();
-                app.blocking_lock().rt.spawn(async move {
-                    io::main_loop(&mut rx, &a).await;
+                let a = self.clone();
+                let io = Io {
+                    state: io_state.clone(),
+                    receiver: Some(rx),
+                    sender: None
+                };
+
+                self.rt.spawn(async move {
+                    io::main_loop(io, a).await;
                 })
             };
 
             // Run the UI thread
             {
-                let a = app.clone();
+                let a = self.clone();
+                let io = Io {
+                    state: io_state,
+                    receiver: None,
+                    sender: Some(tx)
+                };
+
                 system.main_loop(move |f, r, u| {
-                    ui::main_loop(&tx, &a, f, r, u);
+                    ui::main_loop(&io, &a, f, r, u);
                 });
             }
 
             // Gracefully exit the IO thread
-            app.blocking_lock().rt.block_on(io_handle)?;
+            self.rt.block_on(io_handle)?;
         }
 
         else {

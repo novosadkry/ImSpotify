@@ -1,18 +1,11 @@
+use crate::spotify::io::Io;
+
 use super::App;
 use super::IoEvent;
 
-use std::{
-    sync::Arc,
-    time::Duration
-};
+use std::time::Duration;
 use rspotify::model::PlayableItem;
-use tokio::{
-    sync::{
-        Mutex,
-        mpsc::UnboundedSender
-    },
-    time::Instant
-};
+use tokio::time::Instant;
 use imgui::{
     Window,
     Dock,
@@ -21,7 +14,7 @@ use imgui::{
     im_str
 };
 
-fn init(io: &UnboundedSender<IoEvent>, app: &Arc<Mutex<App>>, run: &mut bool, ui: &mut Ui) {
+fn init(io: &Io, ui: &mut Ui) {
     Dock::new().build(|root| {
         root.size(ui.io().display_size).split(
             imgui::Direction::Left,
@@ -45,42 +38,34 @@ fn init(io: &UnboundedSender<IoEvent>, app: &Arc<Mutex<App>>, run: &mut bool, ui
         )
     });
 
-    io.send(IoEvent::FetchUserInfo).unwrap();
-    io.send(IoEvent::FetchCurrentPlayback).unwrap();
+    let sender = io.sender.as_ref().unwrap();
+    sender.send(IoEvent::FetchUserInfo).unwrap();
+    sender.send(IoEvent::FetchCurrentPlayback).unwrap();
 }
 
-pub fn main_loop(io: &UnboundedSender<IoEvent>, app: &Arc<Mutex<App>>, first_run: bool, run: &mut bool, ui: &mut Ui) {
+pub fn main_loop(io: &Io, app: &App, first_run: bool, run: &mut bool, ui: &mut Ui) {
     if first_run {
-        init(io, app, run, ui);
+        init(io, ui);
     }
-
-    let last_fetch = {
-        let app = app.blocking_lock();
-        app.spotify.state.last_fetch
-            .unwrap_or(Instant::now())
-            .elapsed().as_millis()
-    };
 
     Window::new(im_str!("Playlists")).build(ui, || {});
     Window::new(im_str!("Tracks")).build(ui, || {});
 
     Window::new(im_str!("Properties")).build(ui, || {
-        let app = app.blocking_lock();
-        let state = &app.spotify.state;
+        let app_state = app.spotify.state.blocking_lock();
 
-        if let Some(me) = &state.me { {
+        if let Some(me) = &app_state.me {
             ui.text(format!(
                 "Logged-in as: {}",
                 me.display_name.to_owned().unwrap_or(String::new())
             ));
         };
-    }});
+    });
 
     Window::new(im_str!("Playback")).build(ui, || {
-        let app = app.blocking_lock();
-        let state = &app.spotify.state;
+        let app_state = app.spotify.state.blocking_lock();
 
-        if let Some(playback) = &state.playback {
+        if let Some(playback) = &app_state.playback {
             let track = playback.item.to_owned().and_then(|i| {
                 match i {
                     PlayableItem::Track(t) => {
@@ -104,6 +89,13 @@ pub fn main_loop(io: &UnboundedSender<IoEvent>, app: &Arc<Mutex<App>>, first_run
                 let mut progress = playback.progress
                     .unwrap_or(Duration::default())
                     .as_millis();
+
+                let last_fetch = {
+                    let io_state = io.state.blocking_lock();
+                    io_state.playback_last_fetch
+                        .unwrap_or(Instant::now())
+                        .elapsed().as_millis()
+                };
 
                 if playback.is_playing {
                     progress += last_fetch;

@@ -8,10 +8,25 @@ use rspotify::{
 use tokio::{
     sync::{
         Mutex,
-        mpsc::UnboundedReceiver
+        mpsc::{
+            UnboundedSender,
+            UnboundedReceiver
+        }
     },
     time::Instant
 };
+
+#[derive(Default)]
+pub struct Io {
+    pub state: Arc<Mutex<IoState>>,
+    pub sender: Option<UnboundedSender<IoEvent>>,
+    pub receiver: Option<UnboundedReceiver<IoEvent>>
+}
+
+#[derive(Default)]
+pub struct IoState {
+    pub playback_last_fetch: Option<Instant>
+}
 
 #[derive(Debug)]
 pub enum IoEvent {
@@ -19,27 +34,42 @@ pub enum IoEvent {
     FetchCurrentPlayback
 }
 
-pub async fn main_loop(io: &mut UnboundedReceiver<IoEvent>, app: &Arc<Mutex<App>>) {
-    let app_clone = app.clone();
-
-    let playback_task = tokio::spawn(async move { loop {
-        let elapsed = {
-            let app = app_clone.lock().await;
-            app.spotify.state.last_fetch
-                .and_then(|i| Some(i.elapsed().as_millis() > Duration::from_secs(5).as_millis()))
-                .unwrap_or(false)
-        };
-
-        if elapsed {
-            match handle_event(IoEvent::FetchCurrentPlayback, &app_clone).await {
-                Ok(_) => continue,
-                Err(e) => eprintln!("Error in IO thread: {}", e),
-            };
+impl Clone for Io {
+    fn clone(&self) -> Self {
+        Io {
+            state: self.state.clone(),
+            ..Default::default()
         }
-    }});
+    }
+}
 
-    while let Some(event) = io.recv().await {
-        match handle_event(event, app).await {
+pub async fn main_loop(mut io: Io, app: App) {
+    let mut receiver = io.receiver
+        .take().unwrap();
+
+    let playback_task = {
+        let io = io.clone();
+        let app = app.clone();
+
+        tokio::spawn(async move { loop {
+            let elapsed = {
+                let io_state = io.state.lock().await;
+                io_state.playback_last_fetch
+                    .and_then(|i| Some(i.elapsed().as_millis() > Duration::from_secs(5).as_millis()))
+                    .unwrap_or(false)
+            };
+
+            if elapsed {
+                match handle_event(IoEvent::FetchCurrentPlayback, &io, &app).await {
+                    Ok(_) => continue,
+                    Err(e) => eprintln!("Error in IO thread: {}", e),
+                };
+            }
+        }})
+    };
+
+    while let Some(event) = receiver.recv().await {
+        match handle_event(event, &io, &app).await {
             Ok(_) => continue,
             Err(e) => eprintln!("Error in IO thread: {}", e),
         };
@@ -48,50 +78,33 @@ pub async fn main_loop(io: &mut UnboundedReceiver<IoEvent>, app: &Arc<Mutex<App>
     playback_task.await.unwrap();
 }
 
-pub async fn handle_event(event: IoEvent, app: &Arc<Mutex<App>>) -> AppResult<()> {
+pub async fn handle_event(event: IoEvent, io: &Io, app: &App) -> AppResult<()> {
+    let client = &app.spotify.client;
+
     match event {
         IoEvent::FetchUserInfo => {
-            let me = {
-                let client = app
-                    .lock().await
-                    .spotify.client
-                    .to_owned();
+            let me = client.me().await?;
+            let app_state = &mut app
+                .spotify.state
+                .lock().await;
 
-                async move {
-                    client.me().await
-                }
-            };
-
-            let me = me.await?;
-            let state = &mut app
-                .lock().await
-                .spotify.state;
-
-            state.me = Some(me);
+            app_state.me = Some(me);
         },
 
         IoEvent::FetchCurrentPlayback => {
-            let playback = {
-                let client = app
-                    .lock().await
-                    .spotify.client
-                    .to_owned();
+            let playback = client.current_playback(
+                None,
+                Some(vec![&AdditionalType::Episode, &AdditionalType::Track])
+            ).await?;
 
-                async move {
-                    client.current_playback(
-                        None,
-                        Some(vec![&AdditionalType::Episode, &AdditionalType::Track])
-                    ).await
-                }
-            };
+            let app_state = &mut app.spotify.state
+                .lock().await;
 
-            let playback = playback.await?;
-            let state = &mut app
-                .lock().await
-                .spotify.state;
+            let io_state = &mut io.state
+                .lock().await;
 
-            state.playback = playback;
-            state.last_fetch = Some(Instant::now());
+            app_state.playback = playback;
+            io_state.playback_last_fetch = Some(Instant::now());
         }
     };
 
