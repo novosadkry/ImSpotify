@@ -9,7 +9,7 @@ use rspotify::model::PlayableItem;
 use tokio::{
     sync::{
         Mutex,
-        mpsc::Sender
+        mpsc::UnboundedSender
     },
     time::Instant
 };
@@ -21,7 +21,7 @@ use imgui::{
     im_str
 };
 
-fn init(io: &Sender<IoEvent>, app: &Arc<Mutex<App>>, run: &mut bool, ui: &mut Ui) {
+fn init(io: &UnboundedSender<IoEvent>, app: &Arc<Mutex<App>>, run: &mut bool, ui: &mut Ui) {
     Dock::new().build(|root| {
         root.size(ui.io().display_size).split(
             imgui::Direction::Left,
@@ -45,11 +45,11 @@ fn init(io: &Sender<IoEvent>, app: &Arc<Mutex<App>>, run: &mut bool, ui: &mut Ui
         )
     });
 
-    io.blocking_send(IoEvent::FetchUserInfo).unwrap();
-    io.blocking_send(IoEvent::FetchCurrentPlayback).unwrap();
+    io.send(IoEvent::FetchUserInfo).unwrap();
+    io.send(IoEvent::FetchCurrentPlayback).unwrap();
 }
 
-pub fn main_loop(io: &Sender<IoEvent>, app: &Arc<Mutex<App>>, first_run: bool, run: &mut bool, ui: &mut Ui) {
+pub fn main_loop(io: &UnboundedSender<IoEvent>, app: &Arc<Mutex<App>>, first_run: bool, run: &mut bool, ui: &mut Ui) {
     if first_run {
         init(io, app, run, ui);
     }
@@ -122,10 +122,6 @@ pub fn main_loop(io: &Sender<IoEvent>, app: &Arc<Mutex<App>>, first_run: bool, r
             }
         }
     });
-
-    if last_fetch > Duration::from_secs(5).as_millis() {
-        io.blocking_send(IoEvent::FetchCurrentPlayback).unwrap();
-    }
 
     *run = true;
 }

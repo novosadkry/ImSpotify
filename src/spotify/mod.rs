@@ -13,11 +13,11 @@ use rspotify::{
 #[derive(Default)]
 pub struct Spotify {
     pub client: AuthCodeSpotify,
-    pub state: State
+    pub state: SpotifyState
 }
 
 #[derive(Default)]
-pub struct State {
+pub struct SpotifyState {
     pub me: Option<PrivateUser>,
     pub playback: Option<CurrentPlaybackContext>,
     pub last_fetch: Option<Instant>

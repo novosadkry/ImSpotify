@@ -48,7 +48,7 @@ impl App {
             let app = Arc::new(Mutex::new(self));
 
             // Create channel for IO events
-            let (tx, mut rx) = mpsc::channel::<IoEvent>(1);
+            let (tx, mut rx) = mpsc::unbounded_channel();
 
             // Run the IO thread
             let io_handle = {
