@@ -1,3 +1,4 @@
+use crate::System;
 use crate::spotify::io::Io;
 
 use super::App;
@@ -10,11 +11,27 @@ use imgui::{
     Window,
     Dock,
     Ui,
+    StyleVar,
     ProgressBar,
     im_str
 };
 
-fn init(io: &Io, ui: &mut Ui) {
+pub fn main_loop(io: &Io, app: &App, system: &System, run: &mut bool, ui: &mut Ui) {
+    if system.first_run {
+        dock_layout(ui);
+        fetch_init_state(io);
+    }
+
+    draw_dock(ui);
+    draw_playlists(ui);
+    draw_tracks(ui);
+    draw_properties(app, ui);
+    draw_playback(io, app, ui);
+
+    *run = true;
+}
+
+fn dock_layout(ui: &mut Ui) {
     Dock::new().build(|root| {
         root.size(ui.io().display_size).split(
             imgui::Direction::Left,
@@ -37,20 +54,52 @@ fn init(io: &Io, ui: &mut Ui) {
             },
         )
     });
+}
 
+fn fetch_init_state(io: &Io) {
     let sender = io.sender.as_ref().unwrap();
     sender.send(IoEvent::FetchUserInfo).unwrap();
     sender.send(IoEvent::FetchCurrentPlayback).unwrap();
 }
 
-pub fn main_loop(io: &Io, app: &App, first_run: bool, run: &mut bool, ui: &mut Ui) {
-    if first_run {
-        init(io, ui);
-    }
+fn draw_dock(ui: &mut Ui) {
+    let dock_style_stack = ui.push_style_vars(&[
+        StyleVar::WindowRounding(0.0),
+        StyleVar::ChildRounding(0.0),
+        StyleVar::FrameRounding(0.0),
+        StyleVar::GrabRounding(0.0),
+        StyleVar::PopupBorderSize(0.0),
+        StyleVar::ScrollbarRounding(0.0)
+    ]);
 
+    Window::new(im_str!("Dock"))
+        .flags(
+            imgui::WindowFlags::NO_DECORATION |
+            imgui::WindowFlags::NO_MOVE |
+            imgui::WindowFlags::NO_DOCKING |
+            imgui::WindowFlags::NO_BRING_TO_FRONT_ON_FOCUS |
+            imgui::WindowFlags::NO_NAV_FOCUS |
+            imgui::WindowFlags::MENU_BAR,
+        )
+        .position([0.0, 0.0], imgui::Condition::Always)
+        .size(ui.io().display_size, imgui::Condition::Always)
+        .build(ui, || {
+            ui.dockspace(im_str!("Dock"));
+            ui.menu_bar(|| {});
+        });
+
+    dock_style_stack.pop(ui);
+}
+
+fn draw_playlists(ui: &mut Ui) {
     Window::new(im_str!("Playlists")).build(ui, || {});
-    Window::new(im_str!("Tracks")).build(ui, || {});
+}
 
+fn draw_tracks(ui: &mut Ui) {
+    Window::new(im_str!("Tracks")).build(ui, || {});
+}
+
+fn draw_properties(app: &App, ui: &mut Ui) {
     Window::new(im_str!("Properties")).build(ui, || {
         let app_state = app.spotify.state.blocking_lock();
 
@@ -61,7 +110,9 @@ pub fn main_loop(io: &Io, app: &App, first_run: bool, run: &mut bool, ui: &mut U
             ));
         };
     });
+}
 
+fn draw_playback(io: &Io, app: &App, ui: &mut Ui) {
     Window::new(im_str!("Playback")).build(ui, || {
         let app_state = app.spotify.state.blocking_lock();
 
@@ -114,8 +165,6 @@ pub fn main_loop(io: &Io, app: &App, first_run: bool, run: &mut bool, ui: &mut U
             }
         }
     });
-
-    *run = true;
 }
 
 fn format_millis(millis: u128) -> String {

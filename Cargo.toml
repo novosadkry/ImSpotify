@@ -13,6 +13,6 @@ webbrowser = "0.8.1"
 anyhow = "1.0.66"
 tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
 rspotify = { version = "0.11.5", features = ["cli", "env-file"] }
-imgui = { git = "https://github.com/luke-titley/imgui-docking-rs", branch = "release/docking/0.5.0" }
-imgui-winit-support = { git = "https://github.com/luke-titley/imgui-docking-rs", branch = "release/docking/0.5.0" }
-imgui-glium-renderer = { git = "https://github.com/luke-titley/imgui-docking-rs", branch = "release/docking/0.5.0" }
+imgui = { git = "https://github.com/dbr/imgui-docking-rs", branch = "release/docking/0.6.1" }
+imgui-winit-support = { git = "https://github.com/dbr/imgui-docking-rs", branch = "release/docking/0.6.1" }
+imgui-glium-renderer = { git = "https://github.com/dbr/imgui-docking-rs", branch = "release/docking/0.6.1" }

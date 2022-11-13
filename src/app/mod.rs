@@ -69,8 +69,8 @@ impl App {
                     sender: Some(tx)
                 };
 
-                system.main_loop(move |f, r, u| {
-                    ui::main_loop(&io, &a, f, r, u);
+                system.main_loop(move |s, r, u| {
+                    ui::main_loop(&io, &a, s, r, u);
                 });
             }
 

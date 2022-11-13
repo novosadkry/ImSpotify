@@ -8,17 +8,17 @@ use glium::{Display, Surface};
 use imgui::{Context, FontConfig, FontSource, Ui, ConfigFlags};
 use imgui_glium_renderer::Renderer;
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
-use std::time::Instant;
+use std::{rc::Rc, cell::RefCell, time::Instant};
 
 mod clipboard;
 
 pub struct System {
     pub first_run: bool,
-    pub event_loop: EventLoop<()>,
-    pub display: glium::Display,
-    pub imgui: Context,
-    pub platform: WinitPlatform,
-    pub renderer: Renderer,
+    pub event_loop: Option<EventLoop<()>>,
+    pub display: Rc<RefCell<glium::Display>>,
+    pub imgui: Rc<RefCell<Context>>,
+    pub platform: Rc<RefCell<WinitPlatform>>,
+    pub renderer: Rc<RefCell<Renderer>>,
     pub font_size: f32,
 }
 
@@ -31,6 +31,7 @@ pub fn init(title: &str) -> System {
     let context = glutin::ContextBuilder::new().with_vsync(true);
     let builder = WindowBuilder::new()
         .with_title(title.to_owned())
+        .with_decorations(true)
         .with_inner_size(glutin::dpi::LogicalSize::new(1024f64, 768f64));
     let display =
         Display::new(builder, context, &event_loop)
@@ -71,46 +72,52 @@ pub fn init(title: &str) -> System {
 
     System {
         first_run: true,
-        event_loop,
-        display,
-        imgui,
-        platform,
-        renderer,
+        event_loop: Some(event_loop),
+        display: Rc::new(RefCell::new(display)),
+        imgui: Rc::new(RefCell::new(imgui)),
+        platform: Rc::new(RefCell::new(platform)),
+        renderer: Rc::new(RefCell::new(renderer)),
         font_size,
     }
 }
 
 impl System {
-    pub fn main_loop<F: FnMut(bool, &mut bool, &mut Ui) + 'static>(mut self, mut run_ui: F) {
-        let System {
-            event_loop,
-            display,
-            mut imgui,
-            mut platform,
-            mut renderer,
-            ..
-        } = self;
+    pub fn main_loop<F: FnMut(&Self, &mut bool, &mut Ui) + 'static>(mut self, mut run_ui: F) {
+        let event_loop = self.event_loop.take().unwrap();
+        let display = self.display.clone();
+        let imgui = self.imgui.clone();
+        let platform = self.platform.clone();
+        let renderer = self.renderer.clone();
+
         let mut last_frame = Instant::now();
 
         event_loop.run(move |event, _, control_flow| match event {
             Event::NewEvents(_) => {
                 let now = Instant::now();
-                imgui.io_mut().update_delta_time(now - last_frame);
+                imgui.borrow_mut().io_mut().update_delta_time(now - last_frame);
                 last_frame = now;
             }
             Event::MainEventsCleared => {
+                let display = display.borrow();
                 let gl_window = display.gl_window();
+
                 platform
-                    .prepare_frame(imgui.io_mut(), &gl_window.window())
+                    .borrow()
+                    .prepare_frame(imgui.borrow_mut().io_mut(), &gl_window.window())
                     .expect("Failed to prepare frame");
-                gl_window.window().request_redraw();
+                gl_window
+                    .window()
+                    .request_redraw();
             }
             Event::RedrawRequested(_) => {
+                let display = display.borrow();
+                let mut imgui = imgui.borrow_mut();
+
                 let mut ui = imgui.frame();
                 let mut run = true;
 
                 run_ui(
-                    self.first_run,
+                    &self,
                     &mut run, &mut ui
                 );
                 self.first_run = false;
@@ -122,9 +129,10 @@ impl System {
                 let gl_window = display.gl_window();
                 let mut target = display.draw();
                 target.clear_color_srgb(1.0, 1.0, 1.0, 1.0);
-                platform.prepare_render(&ui, gl_window.window());
+                platform.borrow_mut().prepare_render(&ui, gl_window.window());
                 let draw_data = ui.render();
                 renderer
+                    .borrow_mut()
                     .render(&mut target, draw_data)
                     .expect("Rendering failed");
                 target.finish().expect("Failed to swap buffers");
@@ -134,8 +142,9 @@ impl System {
                 ..
             } => *control_flow = ControlFlow::Exit,
             event => {
+                let display = display.borrow();
                 let gl_window = display.gl_window();
-                platform.handle_event(imgui.io_mut(), gl_window.window(), &event);
+                platform.borrow_mut().handle_event(imgui.borrow_mut().io_mut(), gl_window.window(), &event);
             }
         })
     }
