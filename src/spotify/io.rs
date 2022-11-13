@@ -13,7 +13,10 @@ use tokio::{
             UnboundedReceiver
         }
     },
-    time::Instant
+    time::{
+        Instant,
+        sleep_until
+    }
 };
 
 #[derive(Default)]
@@ -52,19 +55,20 @@ pub async fn main_loop(mut io: Io, app: App) {
         let app = app.clone();
 
         tokio::spawn(async move { loop {
-            let elapsed = {
+            let next_fetch = {
                 let io_state = io.state.lock().await;
-                io_state.playback_last_fetch
-                    .and_then(|i| Some(i.elapsed().as_millis() > Duration::from_secs(5).as_millis()))
-                    .unwrap_or(false)
+                match io_state.playback_last_fetch {
+                    Some(last_fetch) => last_fetch + Duration::from_secs(5),
+                    None => Instant::now() + Duration::from_secs(5)
+                }
             };
 
-            if elapsed {
-                match handle_event(IoEvent::FetchCurrentPlayback, &io, &app).await {
-                    Ok(_) => continue,
-                    Err(e) => eprintln!("Error in IO thread: {}", e),
-                };
-            }
+            sleep_until(next_fetch).await;
+
+            match handle_event(IoEvent::FetchCurrentPlayback, &io, &app).await {
+                Ok(_) => continue,
+                Err(e) => eprintln!("Error in IO thread: {}", e),
+            };
         }})
     };
 
