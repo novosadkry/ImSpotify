@@ -9,20 +9,25 @@ use rspotify::model::PlayableItem;
 use tokio::time::Instant;
 use imgui::{
     Window,
-    Dock,
     Ui,
-    StyleVar,
+    DockNode,
     ProgressBar,
-    im_str
+    im_str,
+    sys::{
+        self,
+        ImGuiDockNodeFlags_NoCloseButton,
+        ImGuiDockNodeFlags_AutoHideTabBar
+    }
 };
 
 pub fn main_loop(io: &Io, app: &App, system: &System, run: &mut bool, ui: &mut Ui) {
+    let dock_id = draw_dock();
+
     if system.first_run {
-        dock_layout(ui);
+        dock_layout(dock_id, ui);
         fetch_init_state(io);
     }
 
-    draw_dock(ui);
     draw_playlists(ui);
     draw_tracks(ui);
     draw_properties(app, ui);
@@ -31,29 +36,29 @@ pub fn main_loop(io: &Io, app: &App, system: &System, run: &mut bool, ui: &mut U
     *run = true;
 }
 
-fn dock_layout(ui: &mut Ui) {
-    Dock::new().build(|root| {
-        root.size(ui.io().display_size).split(
-            imgui::Direction::Left,
-            0.2_f32,
-            |left| {
-                left.dock_window(im_str!("Playlists"));
-            },
-            |right| {
-                right.split(
-                    imgui::Direction::Down,
-                    0.2_f32,
-                    |down| {
-                        down.dock_window(im_str!("Playback"));
-                    },
-                    |up| {
-                        up.dock_window(im_str!("Tracks"));
-                        up.dock_window(im_str!("Properties"));
-                    }
-                );
-            },
-        )
-    });
+fn dock_layout(dock_id: u32, ui: &mut Ui) {
+    let root = DockNode::new(dock_id);
+
+    root.size(ui.io().display_size).split(
+        imgui::Direction::Left,
+        0.2_f32,
+        |left| {
+            left.dock_window(im_str!("Playlists"));
+        },
+        |right| {
+            right.split(
+                imgui::Direction::Down,
+                0.2_f32,
+                |down| {
+                    down.dock_window(im_str!("Playback"));
+                },
+                |up| {
+                    up.dock_window(im_str!("Tracks"));
+                    up.dock_window(im_str!("Properties"));
+                }
+            );
+        },
+    );
 }
 
 fn fetch_init_state(io: &Io) {
@@ -62,33 +67,15 @@ fn fetch_init_state(io: &Io) {
     sender.send(IoEvent::FetchCurrentPlayback).unwrap();
 }
 
-fn draw_dock(ui: &mut Ui) {
-    let dock_style_stack = ui.push_style_vars(&[
-        StyleVar::WindowRounding(0.0),
-        StyleVar::ChildRounding(0.0),
-        StyleVar::FrameRounding(0.0),
-        StyleVar::GrabRounding(0.0),
-        StyleVar::PopupBorderSize(0.0),
-        StyleVar::ScrollbarRounding(0.0)
-    ]);
-
-    Window::new(im_str!("Dock"))
-        .flags(
-            imgui::WindowFlags::NO_DECORATION |
-            imgui::WindowFlags::NO_MOVE |
-            imgui::WindowFlags::NO_DOCKING |
-            imgui::WindowFlags::NO_BRING_TO_FRONT_ON_FOCUS |
-            imgui::WindowFlags::NO_NAV_FOCUS |
-            imgui::WindowFlags::MENU_BAR,
+fn draw_dock() -> u32 {
+    unsafe {
+        sys::igDockSpaceOverViewport(
+            sys::igGetMainViewport(),
+            ImGuiDockNodeFlags_NoCloseButton as i32 |
+            ImGuiDockNodeFlags_AutoHideTabBar as i32,
+            ::std::ptr::null::<sys::ImGuiWindowClass>(),
         )
-        .position([0.0, 0.0], imgui::Condition::Always)
-        .size(ui.io().display_size, imgui::Condition::Always)
-        .build(ui, || {
-            ui.dockspace(im_str!("Dock"));
-            ui.menu_bar(|| {});
-        });
-
-    dock_style_stack.pop(ui);
+    }
 }
 
 fn draw_playlists(ui: &mut Ui) {
