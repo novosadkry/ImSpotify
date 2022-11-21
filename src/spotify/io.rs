@@ -1,9 +1,21 @@
 use crate::{App, AppResult};
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::Arc,
+    time::Duration
+};
 use rspotify::{
-    prelude::OAuthClient,
-    model::AdditionalType
+    prelude::{
+        OAuthClient,
+        PlayableId,
+        BaseClient
+    },
+    model::{
+        AdditionalType,
+        TrackId,
+        SimplifiedPlaylist,
+        PlaylistId, PlaylistItem
+    }
 };
 use tokio::{
     sync::{
@@ -34,7 +46,10 @@ pub struct IoState {
 #[derive(Debug)]
 pub enum IoEvent {
     FetchUserInfo,
-    FetchCurrentPlayback
+    FetchCurrentPlayback,
+    FetchPlaylists,
+    FetchPlaylistItems(PlaylistId),
+    PushPlayback(TrackId)
 }
 
 impl Clone for Io {
@@ -101,14 +116,32 @@ pub async fn handle_event(event: IoEvent, io: &Io, app: &App) -> AppResult<()> {
                 Some(vec![&AdditionalType::Episode, &AdditionalType::Track])
             ).await?;
 
-            let app_state = &mut app.spotify.state
-                .lock().await;
-
-            let io_state = &mut io.state
-                .lock().await;
+            let app_state = &mut app.spotify.state.lock().await;
+            let io_state = &mut io.state.lock().await;
 
             app_state.playback = playback;
             io_state.playback_last_fetch = Some(Instant::now());
+        },
+
+        IoEvent::FetchPlaylists => {
+            let stream = client.current_user_playlists_manual(None, None);
+            let playlists: Vec<SimplifiedPlaylist> = stream.await?.items;
+
+            let app_state = &mut app.spotify.state.lock().await;
+            app_state.playlists = Some(playlists);
+        },
+
+        IoEvent::FetchPlaylistItems(id) => {
+            let stream = client.playlist_items_manual(&id, None, None, None, None);
+            let items: Vec<PlaylistItem> = stream.await?.items;
+
+            let app_state = &mut app.spotify.state.lock().await;
+            app_state.selected_playlist_items = Some(items);
+        },
+
+        IoEvent::PushPlayback(id) => {
+            let playable_id: &dyn PlayableId = &id;
+            client.start_uris_playback([playable_id], None, None, None).await?;
         }
     };
 

@@ -5,13 +5,19 @@ use super::App;
 use super::IoEvent;
 
 use std::time::Duration;
-use rspotify::model::PlayableItem;
+use rspotify::model::{
+    PlayableItem,
+    SimplifiedPlaylist
+};
 use tokio::time::Instant;
 use imgui::{
     Window,
     Ui,
     DockNode,
     ProgressBar,
+    Selectable,
+    StyleColor,
+    ImString,
     im_str,
     sys::{
         self,
@@ -28,8 +34,8 @@ pub fn main_loop(io: &Io, app: &App, system: &System, run: &mut bool, ui: &mut U
         fetch_init_state(io);
     }
 
-    draw_playlists(ui);
-    draw_tracks(ui);
+    draw_playlists(io, app, ui);
+    draw_tracks(io, app, ui);
     draw_properties(app, ui);
     draw_playback(io, app, ui);
 
@@ -43,7 +49,16 @@ fn dock_layout(dock_id: u32, ui: &mut Ui) {
         imgui::Direction::Left,
         0.2_f32,
         |left| {
-            left.dock_window(im_str!("Playlists"));
+            left.split(
+                imgui::Direction::Down,
+                0.05_f32,
+                |down| {
+                    down.dock_window(im_str!("Properties"));
+                },
+                |up| {
+                    up.dock_window(im_str!("Playlists"));
+                }
+            );
         },
         |right| {
             right.split(
@@ -54,7 +69,6 @@ fn dock_layout(dock_id: u32, ui: &mut Ui) {
                 },
                 |up| {
                     up.dock_window(im_str!("Tracks"));
-                    up.dock_window(im_str!("Properties"));
                 }
             );
         },
@@ -64,6 +78,7 @@ fn dock_layout(dock_id: u32, ui: &mut Ui) {
 fn fetch_init_state(io: &Io) {
     let sender = io.sender.as_ref().unwrap();
     sender.send(IoEvent::FetchUserInfo).unwrap();
+    sender.send(IoEvent::FetchPlaylists).unwrap();
     sender.send(IoEvent::FetchCurrentPlayback).unwrap();
 }
 
@@ -78,12 +93,105 @@ fn draw_dock() -> u32 {
     }
 }
 
-fn draw_playlists(ui: &mut Ui) {
-    Window::new(im_str!("Playlists")).build(ui, || {});
+fn draw_playlists(io: &Io, app: &App, ui: &mut Ui) {
+    Window::new(im_str!("Playlists")).build(ui, || {
+        let sender = io.sender.as_ref().unwrap();
+        let mut app_state = app.spotify.state.blocking_lock();
+
+        let mut selected_playlist: Option<SimplifiedPlaylist> = None;
+
+        if let Some(playlists) = &app_state.playlists {
+            for playlist in playlists {
+                let mut selected: bool = false;
+
+                let stack = {
+                    app_state.selected_playlist.as_ref().and_then(|p| {
+                        if p.id == playlist.id {
+                            Some(ui.push_style_color(StyleColor::Text, [0.7, 1.0, 1.0, 1.0]))
+                        } else {
+                            None
+                        }
+                    })
+                };
+
+                Selectable::new(&ImString::new(&playlist.name)[..])
+                    .build_with_ref(ui, &mut selected);
+
+                if let Some(stack) = stack {
+                    stack.pop(ui);
+                }
+
+                if selected {
+                    let playlist_id = playlist.id.clone();
+                    selected_playlist = Some(playlist.clone());
+                    sender.send(IoEvent::FetchPlaylistItems(playlist_id)).unwrap();
+                }
+            }
+        }
+
+        if let Some(selected) = selected_playlist {
+            app_state.selected_playlist = Some(selected);
+        }
+    });
 }
 
-fn draw_tracks(ui: &mut Ui) {
-    Window::new(im_str!("Tracks")).build(ui, || {});
+fn draw_tracks(io: &Io, app: &App, ui: &mut Ui) {
+    Window::new(im_str!("Tracks")).build(ui, || {
+        let sender = io.sender.as_ref().unwrap();
+        let app_state = app.spotify.state.blocking_lock();
+
+        if let Some(items) = &app_state.selected_playlist_items {
+            let items = items
+                .iter()
+                .filter(|t| !t.is_local)
+                .map(|t| &t.track);
+
+            for item in items {
+                if let Some(PlayableItem::Track(track)) = item {
+                    let mut selected: bool = false;
+                    let stack = ui.push_style_color(StyleColor::Text, [0.7, 0.7, 0.7, 1.0]);
+
+                    let artists = track.artists
+                        .iter()
+                        .map(|a| a.name.clone())
+                        .collect::<Vec<String>>()
+                        .join(", ");
+
+                    Selectable::new(&ImString::new(&artists)[..])
+                        .build_with_ref(ui, &mut selected);
+
+                    stack.pop(ui);
+
+                    let stack = {
+                        app_state.playback.as_ref().and_then(|playback| {
+                            if let Some(PlayableItem::Track(playback_track)) = &playback.item {
+                                if track.id.as_ref().unwrap() == playback_track.id.as_ref().unwrap() {
+                                    Some(ui.push_style_color(StyleColor::Text, [0.7, 1.0, 1.0, 1.0]))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        })
+                    };
+
+                    let x = ui.cursor_pos()[0];
+                    ui.same_line(x + 250.0);
+                    ui.text(ImString::new(&track.name));
+
+                    if let Some(stack) = stack {
+                        stack.pop(ui);
+                    }
+
+                    if selected {
+                        let track_id = track.id.clone().unwrap();
+                        sender.send(IoEvent::PushPlayback(track_id)).unwrap();
+                    }
+                }
+            }
+        }
+    });
 }
 
 fn draw_properties(app: &App, ui: &mut Ui) {

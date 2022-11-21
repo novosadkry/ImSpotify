@@ -1,14 +1,14 @@
 pub mod auth;
 pub mod io;
 
-
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use rspotify::{
     AuthCodeSpotify,
     model::{
         PrivateUser,
-        CurrentPlaybackContext
+        CurrentPlaybackContext,
+        SimplifiedPlaylist, PlaylistItem
     }
 };
 
@@ -21,7 +21,10 @@ pub struct Spotify {
 #[derive(Default)]
 pub struct SpotifyState {
     pub me: Option<PrivateUser>,
-    pub playback: Option<CurrentPlaybackContext>
+    pub playback: Option<CurrentPlaybackContext>,
+    pub playlists: Option<Vec<SimplifiedPlaylist>>,
+    pub selected_playlist: Option<SimplifiedPlaylist>,
+    pub selected_playlist_items: Option<Vec<PlaylistItem>>
 }
 
 impl Default for Spotify {
